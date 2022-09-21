@@ -67,6 +67,16 @@ def get_red_ball_data(simulation):
 # we are using a single task
 task_index = 0
 
+# Creating the directory for the dataset if it doesn't yet exist
+path = 'data/single-ball-free-fall'
+if not os.path.exists(path):
+    os.makedirs(path)
+else:
+    import glob
+    files = glob.glob(path + '/*')
+    for file in files:
+        os.remove(file)
+
 for action_index in range(len(actions)):
     simulation = simulator.simulate_action(task_index, actions[action_index], need_images=True, need_featurized_objects=True, stride=15)
     if simulation.status.is_invalid(): continue
