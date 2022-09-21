@@ -1,6 +1,9 @@
 # Mac files
 .DS_Store
 
+# Ommiting commiting the generated datasets
+data/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
