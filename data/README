@@ -1,0 +1,5 @@
+# Welcome to the data module
+
+This module contains the extensions of PyTorch Dataset class that I implement for different models during my capstone research journey. This module contains `__init__.py`, so `data` can be used as a module to import datasets directly.
+
+Note that there is a `raw` subdirectory. It is used by the dataset classes as a directory where raw data files are stored. Dataset classes are created in such a way that they generate raw data files by themselves, and provide interface to access those raw files in batches to avoid loading everything to RAM at one time. To prevent numerous data files from going into version control (specifically into the GitHub repository), I put `raw` directory into `.gitignore`. If you want the dataset classes to go generate raw files in the subdirectory of `raw`, please specify the path manually whenever you use the dataset class - either by providing it the absolute path to your desired subdirectory of `raw`, or by providing it with the relative path to that subdirectory with respect to the place from where you are running the script.
