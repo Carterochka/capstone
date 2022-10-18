@@ -1,4 +1,5 @@
 from glob import glob
+import torch
 import numpy as np
 import re
 import os
@@ -6,6 +7,11 @@ import phyre
 from .ClassicalMechanicsDataset import ClassicalMechanicsDataset
 
 class OneBallFreeFallThreeFramesDataset(ClassicalMechanicsDataset):
+    def __getitem__(self, idx):
+        data = np.load(self.data_files[idx])
+        return torch.FloatTensor(data[:, 0:3]), torch.FloatTensor(data[:, 3].reshape(-1,1))
+
+
     def generate_data(self):
         # Choosing a setup where only one ball is needed
         eval_setup = 'ball_cross_template'

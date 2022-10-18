@@ -18,9 +18,9 @@ class ClassicalMechanicsDataset(Dataset, metaclass=abc.ABCMeta):
         return len(self.data_files)
     
     
+    @abc.abstractmethod
     def __getitem__(self, idx):
-        data = np.load(self.data_files[idx])
-        return torch.FloatTensor(data[:, 0:3]), torch.FloatTensor(data[:, 3].reshape(-1,1))
+        pass
 
     
     @classmethod
