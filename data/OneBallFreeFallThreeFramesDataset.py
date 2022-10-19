@@ -31,7 +31,6 @@ class OneBallFreeFallThreeFramesDataset(ClassicalMechanicsDataset):
 
         # Getting action tier for our tasks - a single ball
         action_tier = phyre.eval_setup_to_action_tier(eval_setup)
-        print('Action tier for', eval_setup, 'is', action_tier)
 
         # Create the simulator from the tasks and tier.
         simulator = phyre.initialize_simulator(tasks, action_tier)
