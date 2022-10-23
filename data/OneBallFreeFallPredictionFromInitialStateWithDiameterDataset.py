@@ -1,15 +1,14 @@
-from glob import glob
-import torch
-import numpy as np
-import re
-import os
-import phyre
 from .ClassicalMechanicsDataset import ClassicalMechanicsDataset
+import numpy as np
+import torch
+import phyre
+import os
+import re
 
-class OneBallFreeFallThreeFramesDataset(ClassicalMechanicsDataset):
+class OneBallFreeFallPredictionFromInitialStateWithDiameterDataset(ClassicalMechanicsDataset):
     def __getitem__(self, idx):
         data = np.load(self.data_files[idx])
-        return torch.FloatTensor(data[:, 0:3]), torch.FloatTensor(data[:, 3].reshape(-1,1))
+        return torch.FloatTensor(data[0]).unsqueeze(dim=0), torch.FloatTensor(data[:, 0]).reshape(1,-1)
 
 
     def generate_data(self):
@@ -49,10 +48,9 @@ class OneBallFreeFallThreeFramesDataset(ClassicalMechanicsDataset):
         def get_red_ball_data(simulation):
             features = simulation.featurized_objects.features
             data = []
-            for frame_id in range(3, len(features)):
-                if frame_id >= 4 and features[frame_id][-1][1] == features[frame_id-4][-1][1]: 
-                    break
-                data.append([features[frame_id-3][-1][1], features[frame_id-2][-1][1], features[frame_id-1][-1][1], features[frame_id][-1][1]])
+            # I am only interested in saving the first 25 frames if the simulation is larger
+            for frame_id in range(min(25, len(features))):
+                data.append([features[frame_id][-1][1], features[frame_id][-1][3]])
             return data
         
         if not os.path.exists(self.data_path):
