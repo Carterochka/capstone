@@ -8,7 +8,7 @@ import re
 class OneBallFreeFallPredictionFromInitialStateWithDiameterDataset(ClassicalMechanicsDataset):
     def __getitem__(self, idx):
         data = np.load(self.data_files[idx])
-        return torch.FloatTensor(data[0]).unsqueeze(dim=0), torch.FloatTensor(data[:, 0]).reshape(1,-1)
+        return torch.FloatTensor(data[0]).unsqueeze(dim=0), torch.FloatTensor(data[1:, 0]).reshape(1,-1)
 
 
     def generate_data(self):

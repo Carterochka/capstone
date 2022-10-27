@@ -24,7 +24,7 @@ class ClassicalMechanicsDataset(Dataset, metaclass=abc.ABCMeta):
 
     
     @classmethod
-    def train_test_split(dataset_cls, path, test_frac=0):        
+    def train_test_split(dataset_cls, path, test_frac=0, random_state=None):        
         data_glob = glob(path + '/*')
         
         if not data_glob:
@@ -34,14 +34,19 @@ class ClassicalMechanicsDataset(Dataset, metaclass=abc.ABCMeta):
         
         test_size = int(math.floor(test_frac * len(data_glob)))
 
+        print('Test size: ', test_size)
+
         if test_size != test_frac * len(data_glob):
             print(f'train_test_split response: test fraction rounded to ' +
                 f'{test_size/len(data_glob)} ({test_size} simulations)')
 
         all_indices = list(range(len(data_glob)))
+        
+        if random_state != None:
+            random.seed(42)
+        
         test_indices = random.choices(all_indices, k=test_size)
         train_indices = [i for i in all_indices if i not in test_indices]
-
         
         train_dataset = dataset_cls(path, data_file_indices=train_indices)
         test_dataset = dataset_cls(path, data_file_indices=test_indices)
