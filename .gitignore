@@ -2,7 +2,7 @@
 .DS_Store
 
 # Ommiting commiting the generated datasets
-data/
+data/raw
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
