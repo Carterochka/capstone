@@ -12,7 +12,7 @@ class OneBallFreeFallThreeFramesDataset(ClassicalMechanicsDataset):
         return torch.FloatTensor(data[:, 0:3]), torch.FloatTensor(data[:, 3].reshape(-1,1))
 
 
-    def generate_data(self):
+    def generate_data(self, max_actions=30000):
         # Choosing a setup where only one ball is needed
         eval_setup = 'ball_cross_template'
 
@@ -38,7 +38,7 @@ class OneBallFreeFallThreeFramesDataset(ClassicalMechanicsDataset):
         # getting a 10000 actions from a simulator
         # it uniformly samples actions skipping invalid ones
         # Action dimensions: 3 (x, y, radius) - represent coordinates and size of the red ball
-        actions = simulator.build_discrete_action_space(max_actions=10000)
+        actions = simulator.build_discrete_action_space(max_actions=max_actions)
         
         # Defining a function to check if the red ball is in the free fall throughout the simulation
         def is_red_ball_in_free_fall(simulation):
