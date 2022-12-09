@@ -1,5 +1,20 @@
+# Abstract dataset
 from .ClassicalMechanicsDataset import ClassicalMechanicsDataset
+
+# Single ball next frame prediction dataset
 from .OneBallFreeFallThreeFramesDataset import OneBallFreeFallThreeFramesDataset
+
+# Single ball free-fall y-coordinate prediction dataset
 from .OneBallFreeFallPredictionFromInitialStateWithDiameterDataset import OneBallFreeFallPredictionFromInitialStateWithDiameterDataset
+
+# Single ball free-fall trajectory prediction dataset
 from .OneBall2DFreeFallPredictionFromInitialStateWithDiameterDataset import OneBall2DFreeFallPredictionFromInitialStateWithDiameterDataset
+
+# Three balls free-fall trajecory prediction dataset
 from .ThreeBalls2DFreeFallDataset import ThreeBalls2DFreeFallDataset
+
+# Three balls trajectory prediction dataset
+from .ThreeBallsCollisionDataset import ThreeBallsCollisionsDataset
+
+# Three balls scene development prediction dataset
+from .ThreeBallsCollisionFullSceneDataset import ThreeBallsCollisionsFullSceneDataset
