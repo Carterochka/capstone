@@ -11,7 +11,10 @@ class ClassicalMechanicsDataset(Dataset, metaclass=abc.ABCMeta):
         self.data_path = path
 
         path_glob = sorted(glob(self.data_path + '/*'))
-        self.data_files = np.take(path_glob, data_file_indices) if data_file_indices != None else path_glob
+        if type(data_file_indices) != type(None):
+            self.data_files = np.take(path_glob, data_file_indices)
+        else:
+            self.data_files = path_glob
         
     
     def __len__(self):
@@ -24,11 +27,11 @@ class ClassicalMechanicsDataset(Dataset, metaclass=abc.ABCMeta):
 
     
     @classmethod
-    def train_test_split(dataset_cls, path, test_frac=0, random_state=None):        
+    def train_test_split(dataset_cls, path, test_frac=0, random_state=None, max_actions=30000):        
         data_glob = glob(path + '/*')
         
         if not data_glob:
-            dataset_cls(path).generate_data()
+            dataset_cls(path).generate_data(max_actions=max_actions)
             data_glob = glob(path + '/*')
             
         
@@ -40,20 +43,27 @@ class ClassicalMechanicsDataset(Dataset, metaclass=abc.ABCMeta):
             print(f'train_test_split response: test fraction rounded to ' +
                 f'{test_size/len(data_glob)} ({test_size} simulations)')
 
-        all_indices = list(range(len(data_glob)))
+        all_indices = np.array(range(len(data_glob)))
         
-        if random_state != None:
-            random.seed(42)
+        # test_indices = random.choices(all_indices, k=test_size)
+        # train_indices = [i for i in all_indices if i not in test_indices]
         
-        test_indices = random.choices(all_indices, k=test_size)
-        train_indices = [i for i in all_indices if i not in test_indices]
-        
+        # train_dataset = dataset_cls(path, data_file_indices=train_indices)
+        # test_dataset = dataset_cls(path, data_file_indices=test_indices)
+
+        test_indices = np.random.choice(all_indices, size=int(test_frac * len(all_indices)))
+
+        mask = np.ones(len(all_indices), dtype=bool)
+        mask[test_indices] = False
+
+        train_indices=all_indices[mask]
+
         train_dataset = dataset_cls(path, data_file_indices=train_indices)
         test_dataset = dataset_cls(path, data_file_indices=test_indices)
-        
+
         return (train_dataset, test_dataset)
     
     
     
     @abc.abstractmethod
-    def generate_data(self): pass
+    def generate_data(self, max_actions=30000): pass
