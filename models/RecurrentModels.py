@@ -10,16 +10,24 @@ if '..' not in sys.path:
 import torch
 from torch import nn
 
+import torch.nn.functional as F
+
 import abc
 
 import reservoirpy as rpy
 from reservoirpy.nodes import Input, Reservoir, Ridge, ReLU
 
+def zero_one_constrain(tensor):
+    ceil = torch.minimum(tensor, torch.ones(tensor.size()))
+    return F.relu(ceil)
 
 class RNNBaseClass:
+    def run(self, *args, **kwargs):
+        return zero_one_constrain(self(*args, **kwargs))
+
     @staticmethod
     def calculate_loss(model, loss_fn, dataloader, dataset, visualize_first_10_trajectories=True):
-        loss = (np.sum([loss_fn(model(X), y)*len(y) for X, y in dataloader]) / len(dataset)) ** 0.5
+        loss = (np.sum([loss_fn(model.run(X), y)*len(y) for X, y in dataloader]) / len(dataset)) ** 0.5
         print('Calculated loss: ', loss)
 
         if visualize_first_10_trajectories:
@@ -46,7 +54,7 @@ class RNNBaseClass:
 
 
             for X, y in dataloader:
-                pred = model(X).detach().numpy()
+                pred = model.run(X).detach().numpy()
 
                 for count in range(10):
                     gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
@@ -118,7 +126,7 @@ class RNNBaseClass:
 
 
 class VanilaRNN(nn.Module, RNNBaseClass):
-    def __init__(self, input_dim, hidden_dim, num_rnns, output_dim, dropout_prob=0):
+    def __init__(self, input_dim, hidden_dim, num_rnns, output_dim, dropout_prob=0, relu=False):
         super().__init__()
 
         self.hidden_dim = hidden_dim
@@ -127,6 +135,7 @@ class VanilaRNN(nn.Module, RNNBaseClass):
         self.rnn = nn.RNN(input_dim, hidden_dim, num_rnns, batch_first=True, dropout=dropout_prob)
         self.out = nn.Linear(hidden_dim, output_dim)
         torch.nn.init.normal_(self.out.weight, 0, 1)
+        self.relu = torch.nn.ReLU() if relu else None
 
     
     def forward(self, x):
@@ -138,11 +147,15 @@ class VanilaRNN(nn.Module, RNNBaseClass):
 
         # Convert the final state to our desired output shape (batch_size, output_dim)
         out = self.out(out)
+
+        if self.relu:
+            out = self.relu(out)
+
         return out
 
 
 class GRU(nn.Module, RNNBaseClass):
-    def __init__(self, input_dim, hidden_dim, num_rnns, output_dim, dropout_prob=0):
+    def __init__(self, input_dim, hidden_dim, num_rnns, output_dim, dropout_prob=0, relu=False):
         super().__init__()
 
         self.hidden_dim = hidden_dim
@@ -151,6 +164,7 @@ class GRU(nn.Module, RNNBaseClass):
         self.gru = nn.GRU(input_dim, hidden_dim, num_rnns, batch_first=True, dropout=dropout_prob)
         self.out = nn.Linear(hidden_dim, output_dim)
         torch.nn.init.normal_(self.out.weight, 0, 1)
+        self.relu = torch.nn.ReLU() if relu else None
 
     
     def forward(self, x):
@@ -162,11 +176,15 @@ class GRU(nn.Module, RNNBaseClass):
 
         # Convert the final state to our desired output shape (batch_size, output_dim)
         out = self.out(out)
+
+        if self.relu:
+            out = self.relu(out)
+
         return out
 
 
 class LSTM(nn.Module, RNNBaseClass):
-    def __init__(self, input_dim, hidden_dim, num_rnns, output_dim, dropout_prob=0):
+    def __init__(self, input_dim, hidden_dim, num_rnns, output_dim, dropout_prob=0, relu=False):
         super().__init__()
 
         self.hidden_dim = hidden_dim
@@ -175,6 +193,7 @@ class LSTM(nn.Module, RNNBaseClass):
         self.lstm = nn.LSTM(input_dim, hidden_dim, num_rnns, batch_first=True, dropout=dropout_prob)
         self.out = nn.Linear(hidden_dim, output_dim)
         torch.nn.init.normal_(self.out.weight, 0, 1)
+        self.relu = torch.nn.ReLU() if relu else None
 
     
     def forward(self, x):
@@ -191,11 +210,15 @@ class LSTM(nn.Module, RNNBaseClass):
 
         # Convert the final state to our desired output shape (batch_size, output_dim)
         out = self.out(out)
+
+        if self.relu:
+            out = self.relu(out)
+
         return out
 
 
 # This is the base class for the echo state models. It implements the loss calculation given the reservoir model specifics
-class EchoBaseClass(abc.ABC, LossCalculator):
+class EchoBaseClass(abc.ABC):
     @abc.abstractmethod
     def __init__(self, input_dim, reservoir_size, output_dim, leaking_rate, spectral_radius, ridge_param):
         pass
@@ -206,12 +229,12 @@ class EchoBaseClass(abc.ABC, LossCalculator):
 
 
     def run(self, *args, **kwargs):
-        return self.model.run(*args, **kwargs)
+        return zero_one_constrain(torch.tensor(self.model.run(*args, **kwargs)))
 
 
     @staticmethod
     def calculate_loss(model, loss_fn, dataloader, dataset, visualize_first_10_trajectories=True):
-        loss = (np.sum([loss_fn(model.run(X.squeeze().numpy()), y.squeeze().numpy())*len(y) for X, y in dataloader]) / len(dataset)) ** 0.5
+        loss = (np.sum([loss_fn(model.run(X.squeeze().numpy()), y.squeeze())*len(y) for X, y in dataloader]) / len(dataset)) ** 0.5
         print('Test loss: ', loss)
 
         if visualize_first_10_trajectories:
@@ -242,7 +265,7 @@ class EchoBaseClass(abc.ABC, LossCalculator):
 
                 for count in range(10):
                     gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
-                    pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
+                    pr = np.insert(pred.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
 
                     axs1[int(count >= 5)][count % 5].plot(gr[1::2], label=f'Ground truth')
                     axs1[int(count >= 5)][count % 5].plot(pr[1::2], label='Predicted')
@@ -256,18 +279,31 @@ class EchoBaseClass(abc.ABC, LossCalculator):
 
             plt.show()
         return loss
+    
+    @classmethod
+    def train_model(model_class, train_dataloader, **kwargs):
+        network = model_class(**kwargs)
+        print(network.model)
+
+        for X, y in train_dataloader:
+            network.model.fit(X.squeeze().numpy(), y.squeeze().numpy())
+
+        return network
 
 
 class ESN(EchoBaseClass):
-    def __init__(self, input_dim, reservoir_size, output_dim, leaking_rate, spectral_radius, ridge_param):
+    def __init__(self, input_dim, reservoir_size, output_dim, leaking_rate, spectral_radius, ridge_param, relu=False):
         reservoir = Reservoir(units=reservoir_size, lr=leaking_rate, sr=spectral_radius, input_bias=False)
-        readout = Ridge(output_dim=output_dim, ridge=ridge_param) >> ReLU()  
+        readout = Ridge(output_dim=output_dim, ridge=ridge_param)
 
         self.model = reservoir >> readout
 
+        if relu:
+            self.model = self.model >> ReLU()
+
 
 class SeqESN(EchoBaseClass):
-    def __init__(self, input_dim, reservoir_size, output_dim, leaking_rate, spectral_radius, ridge_param, number_of_reservoirs=1):
+    def __init__(self, input_dim, reservoir_size, output_dim, leaking_rate, spectral_radius, ridge_param, number_of_reservoirs=1, relu=False):
         self.model = Input()
 
         for _ in range(number_of_reservoirs):
@@ -275,11 +311,12 @@ class SeqESN(EchoBaseClass):
             readout = Ridge(output_dim=output_dim, ridge=ridge_param)
             self.model = self.model >> reservoir >> readout
 
-        self.model = self.model >> ReLU()
+        if relu:
+            self.model = self.model >> ReLU()
 
 
 class ParallelESN(EchoBaseClass):
-    def __init__(self, input_dim, reservoir_size, output_dim, leaking_rate, spectral_radius, ridge_param, number_of_reservoirs=1):
+    def __init__(self, input_dim, reservoir_size, output_dim, leaking_rate, spectral_radius, ridge_param, number_of_reservoirs=1, relu=False):
         self.model = []
         for _ in range(number_of_reservoirs):
             reservoir = Reservoir(units=reservoir_size, lr=leaking_rate, sr=spectral_radius, input_bias=False)
@@ -290,16 +327,23 @@ class ParallelESN(EchoBaseClass):
         for i in range(1, number_of_reservoirs):
             parallels >> self.model[i]
 
-        readout = Ridge(output_dim=output_dim, ridge=ridge_param) >> ReLU()
-        self.model = self.model >> readout & parallels
+        readout = Ridge(output_dim=output_dim, ridge=ridge_param)# >> ReLU()
+        self.model.append(parallels)
+        self.model = self.model >> readout
+
+        if relu:
+            self.model = self.model >> ReLU()
 
 
 class GroupedESN(EchoBaseClass):
-    def __init__(self, input_dim, reservoir_size, output_dim, leaking_rate, spectral_radius, ridge_param, number_of_reservoirs=1):
+    def __init__(self, input_dim, reservoir_size, output_dim, leaking_rate, spectral_radius, ridge_param, number_of_reservoirs=1, relu=False):
         self.model = []
         for _ in range(number_of_reservoirs):
             reservoir = Reservoir(units=reservoir_size, lr=leaking_rate, sr=spectral_radius, input_bias=False)
             self.model.append(reservoir)
 
-        readout = Ridge(output_dim=output_dim, ridge=ridge_param) >> ReLU()
+        readout = Ridge(output_dim=output_dim, ridge=ridge_param)# >> ReLU()
         self.model = self.model >> readout
+
+        if relu:
+            self.model = self.model >> ReLU()
