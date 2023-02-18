@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 import phyre
 
-class ThreeBallsCollisionsDataset(ClassicalMechanicsDataset):
+class ThreeBallsCollisionDataset(ClassicalMechanicsDataset):
     def __getitem__(self, idx):
         data = np.load(self.data_files[idx])
         return torch.FloatTensor(data[0]).unsqueeze(dim=0), torch.FloatTensor(data[1:, -3:-1]).reshape(1,-1)
@@ -59,6 +59,13 @@ class ThreeBallsCollisionsDataset(ClassicalMechanicsDataset):
                 data.append(instance)
             return data
         
+        # getting the free-fall fraction from the function call arguments
+        free_fall_fraction = kwargs['free_fall_fraction']
+
+        # setting up helper variables to manage the fraction of free-fall scenarios
+        free_fall_paths = []
+        total_count = 0
+        
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
         else:
@@ -68,8 +75,30 @@ class ThreeBallsCollisionsDataset(ClassicalMechanicsDataset):
                 os.remove(file)
 
         for task_index, action_index in tqdm(product(range(len(tasks)), range(len(actions)))):
+            # Getting the simulation
             simulation = simulator.simulate_action(task_index, actions[action_index], need_images=True, need_featurized_objects=True, stride=15)
             if simulation.status.is_invalid(): continue
+
+            # Extracting data from the simulation
             simulation_data = get_simulation_data(simulation)
             if not simulation_data: continue
-            np.save(self.data_path + f'/task-{task_index}-action-{action_index}', simulation_data)
+
+            file_path = self.data_path + f'/task-{task_index}-action-{action_index}'
+
+            # If the simulated scenario is the free-fall, then save its path
+            if is_red_ball_in_free_fall(simulation):
+                free_fall_paths.append(file_path)
+            
+            # Save the simulation and count it toward the total
+            np.save(file_path, simulation_data)
+            total_count += 1
+
+        # Removing the free-fall simulations until the fraction of free-fall scenarios is matched
+        while len(free_fall_paths) / total_count > free_fall_fraction:
+            random_free_fall_file = np.random.choice(free_fall_paths)
+            os.remove(random_free_fall_file)
+            free_fall_paths.remove(random_free_fall_file)
+            total_count -= 1
+
+        print(f'Total scenarios generated: {total_count}')
+        print(f'Fraction of the free-fall scenarios: {free_fall_fraction}')
