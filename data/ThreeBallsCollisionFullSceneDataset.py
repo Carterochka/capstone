@@ -14,7 +14,7 @@ class ThreeBallsCollisionsFullSceneDataset(ClassicalMechanicsDataset):
         return torch.FloatTensor(data[0]).unsqueeze(dim=0), torch.FloatTensor(data[1:, [0, 1, 3, 4, 6, 7]]).reshape(1,-1)
 
 
-    def generate_data(self, max_actions=30000):
+    def generate_data(self, max_actions=30000, **kwargs):
         # Choosing a setup where only one ball is needed
         eval_setup = 'ball_cross_template'
 
