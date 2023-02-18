@@ -27,11 +27,11 @@ class ClassicalMechanicsDataset(Dataset, metaclass=abc.ABCMeta):
 
     
     @classmethod
-    def train_test_split(dataset_cls, path, test_frac=0, random_state=None, max_actions=30000):        
+    def train_test_split(dataset_cls, path, test_frac=0, random_state=None, max_actions=30000, **kwargs):        
         data_glob = glob(path + '/*')
         
         if not data_glob:
-            dataset_cls(path).generate_data(max_actions=max_actions)
+            dataset_cls(path).generate_data(max_actions=max_actions, **kwargs)
             data_glob = glob(path + '/*')
             
         
@@ -66,4 +66,4 @@ class ClassicalMechanicsDataset(Dataset, metaclass=abc.ABCMeta):
     
     
     @abc.abstractmethod
-    def generate_data(self, max_actions=30000): pass
+    def generate_data(self, max_actions=30000, **kwargs): pass

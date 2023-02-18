@@ -14,7 +14,7 @@ class ThreeBallsCollisionsDataset(ClassicalMechanicsDataset):
         return torch.FloatTensor(data[0]).unsqueeze(dim=0), torch.FloatTensor(data[1:, -3:-1]).reshape(1,-1)
 
 
-    def generate_data(self, max_actions=30000):
+    def generate_data(self, max_actions=30000, **kwargs):
         # Choosing a setup where only one ball is needed
         eval_setup = 'ball_cross_template'
 
@@ -39,6 +39,11 @@ class ThreeBallsCollisionsDataset(ClassicalMechanicsDataset):
         # Action dimensions: 3 (x, y, radius) - represent coordinates and size of the red ball
         actions = simulator.build_discrete_action_space(max_actions=max_actions)
 
+        # Defining a function to check if the red ball is in the free fall throughout the simulation
+        def is_red_ball_in_free_fall(simulation):
+            features = simulation.featurized_objects.features
+            return False not in [features[0][-1][0] == features[frame_id][-1][0] for frame_id in range(len(features))]
+        
         # Getting only the coordinates of the red ball
         def get_simulation_data(simulation):
             features = simulation.featurized_objects.features
