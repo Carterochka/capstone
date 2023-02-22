@@ -31,46 +31,132 @@ class RNNBaseClass:
         print('Calculated loss: ', loss)
 
         if visualize_first_10_trajectories:
-            fig1, axs1 = plt.subplots(2, 5, figsize=(20,10))
-            fig2, axs2 = plt.subplots(2, 5, figsize=(20,10))
+            data_shape = dataset[0][0].shape[1]
 
-            fig1.suptitle('Y-coordinate over time')
-            fig2.suptitle('Trajectory')
+            if data_shape == 2:
+                fig1, axs1 = plt.subplots(2, 5, figsize=(20,10))
 
-            plt.setp(axs1[-1, :], xlabel='Frame number')
-            plt.setp(axs1[:, 0], ylabel='Y-coordinate')
+                fig1.suptitle('Y-coordinate over time')
 
-            plt.setp(axs2[-1, :], xlabel='X-coordinate')
-            plt.setp(axs2[:, 0], ylabel='Y-coordinate')
+                plt.setp(axs1[-1, :], xlabel='Frame number')
+                plt.setp(axs1[:, 0], ylabel='Y-coordinate')
 
-            for row_id in range(len(axs1)):
-                for col_id in range(len(axs1[row_id])):
-                    # axs1 and axs2 are time series, so only limiting y-axis
-                    axs1[row_id, col_id].set_ylim(0, 1)
+                for row_id in range(len(axs1)):
+                    for col_id in range(len(axs1[row_id])):
+                        # axs1 and axs2 are time series, so only limiting y-axis
+                        axs1[row_id, col_id].set_ylim(0, 1)
 
-                    # axs3 shows trajectories, so limiting both axis
-                    axs2[row_id, col_id].set_xlim(0, 1)
-                    axs2[row_id, col_id].set_ylim(0, 1)
+                for X, y in dataloader:
+                    pred = model.run(X).detach().numpy()
+
+                    for count in range(10):
+                        gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0])
+                        pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0])
+
+                        axs1[int(count >= 5)][count % 5].plot(gr[1::2], label=f'Ground truth')
+                        axs1[int(count >= 5)][count % 5].plot(pr[1::2], label='Predicted')
+                        axs1[int(count >= 5)][count % 5].legend()
+
+                    break
+
+                plt.show()
+            
+            elif data_shape == 3:
+                fig1, axs1 = plt.subplots(2, 5, figsize=(20,10))
+                fig2, axs2 = plt.subplots(2, 5, figsize=(20,10))
+
+                fig1.suptitle('Y-coordinate over time')
+                fig2.suptitle('Trajectory')
+
+                plt.setp(axs1[-1, :], xlabel='Frame number')
+                plt.setp(axs1[:, 0], ylabel='Y-coordinate')
+
+                plt.setp(axs2[-1, :], xlabel='X-coordinate')
+                plt.setp(axs2[:, 0], ylabel='Y-coordinate')
+
+                for row_id in range(len(axs1)):
+                    for col_id in range(len(axs1[row_id])):
+                        # axs1 shows time series, so only limiting y-axis
+                        axs1[row_id, col_id].set_ylim(0, 1)
+
+                        # axs2 shows trajectories, so limiting both axis
+                        axs2[row_id, col_id].set_xlim(0, 1)
+                        axs2[row_id, col_id].set_ylim(0, 1)
 
 
-            for X, y in dataloader:
-                pred = model.run(X).detach().numpy()
+                for X, y in dataloader:
+                    pred = model.run(X).detach().numpy()
 
-                for count in range(10):
-                    gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
-                    pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
+                    for count in range(10):
+                        gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
+                        pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
 
-                    axs1[int(count >= 5)][count % 5].plot(gr[1::2], label=f'Ground truth')
-                    axs1[int(count >= 5)][count % 5].plot(pr[1::2], label='Predicted')
-                    axs1[int(count >= 5)][count % 5].legend()
+                        axs1[int(count >= 5)][count % 5].plot(gr[1::2], label=f'Ground truth')
+                        axs1[int(count >= 5)][count % 5].plot(pr[1::2], label='Predicted')
+                        axs1[int(count >= 5)][count % 5].legend()
 
-                    axs2[int(count >= 5)][count % 5].plot(gr[0::2], gr[1::2], label=f'Ground truth')
-                    axs2[int(count >= 5)][count % 5].plot(pr[0::2], pr[1::2], label='Predicted')
-                    axs2[int(count >= 5)][count % 5].legend()
+                        axs2[int(count >= 5)][count % 5].plot(gr[0::2], gr[1::2], label=f'Ground truth')
+                        axs2[int(count >= 5)][count % 5].plot(pr[0::2], pr[1::2], label='Predicted')
+                        axs2[int(count >= 5)][count % 5].legend()
 
-                break
+                    break
 
-            plt.show()
+                plt.show()
+
+            elif data_shape == 9:
+                fig1, axs1 = plt.subplots(2, 5, figsize=(20,10))
+                fig2, axs2 = plt.subplots(2, 5, figsize=(20,10))
+                fig3, axs3 = plt.subplots(2, 5, figsize=(20,10))
+
+                fig1.suptitle('Y-coordinate over time')
+                fig2.suptitle('X-coordinate over time')
+                fig3.suptitle('Trajectory')
+
+                plt.setp(axs1[-1, :], xlabel='Frame number')
+                plt.setp(axs1[:, 0], ylabel='Y-coordinate')
+
+                plt.setp(axs2[-1, :], xlabel='Frame number')
+                plt.setp(axs2[:, 0], ylabel='X-coordinate')
+
+                plt.setp(axs3[-1, :], xlabel='X-coordinate')
+                plt.setp(axs3[:, 0], ylabel='Y-coordinate')
+
+                for row_id in range(len(axs1)):
+                    for col_id in range(len(axs1[row_id])):
+                        # axs1 and axs2 are time series, so only limiting y-axis
+                        axs1[row_id, col_id].set_ylim(0, 1)
+                        axs2[row_id, col_id].set_ylim(0, 1)
+
+                        # axs3 shows trajectories, so limiting both axis
+                        axs3[row_id, col_id].set_xlim(0, 1)
+                        axs3[row_id, col_id].set_ylim(0, 1)
+
+
+                for X, y in dataloader:
+                    pred = model.run(X).detach().numpy()
+
+                    for count in range(10):
+                        gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][-3:-1])
+                        pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][-3:-1])
+
+                        axs1[int(count >= 5)][count % 5].plot(gr[1::2], label=f'Ground truth')
+                        axs1[int(count >= 5)][count % 5].plot(pr[1::2], label='Predicted')
+                        axs1[int(count >= 5)][count % 5].legend()
+
+                        axs2[int(count >= 5)][count % 5].plot(gr[0::2], label=f'Ground truth')
+                        axs2[int(count >= 5)][count % 5].plot(pr[0::2], label='Predicted')
+                        axs2[int(count >= 5)][count % 5].legend()
+
+                        axs3[int(count >= 5)][count % 5].plot(gr[0::2], gr[1::2], label=f'Ground truth')
+                        axs3[int(count >= 5)][count % 5].plot(pr[0::2], pr[1::2], label='Predicted')
+                        axs3[int(count >= 5)][count % 5].legend()
+
+                    break
+
+                plt.show()
+            
+            else:
+                print('Visual cannot be created as scenario cannot be identified from the data shape')
         return loss
     
 
@@ -238,46 +324,132 @@ class EchoBaseClass(abc.ABC):
         print('Test loss: ', loss)
 
         if visualize_first_10_trajectories:
-            fig1, axs1 = plt.subplots(2, 5, figsize=(20,10))
-            fig2, axs2 = plt.subplots(2, 5, figsize=(20,10))
+            data_shape = dataset[0][0].shape[1]
 
-            fig1.suptitle('Y-coordinate over time')
-            fig2.suptitle('Trajectory')
+            if data_shape == 2:
+                fig1, axs1 = plt.subplots(2, 5, figsize=(20,10))
 
-            plt.setp(axs1[-1, :], xlabel='Frame number')
-            plt.setp(axs1[:, 0], ylabel='Y-coordinate')
+                fig1.suptitle('Y-coordinate over time')
 
-            plt.setp(axs2[-1, :], xlabel='X-coordinate')
-            plt.setp(axs2[:, 0], ylabel='Y-coordinate')
+                plt.setp(axs1[-1, :], xlabel='Frame number')
+                plt.setp(axs1[:, 0], ylabel='Y-coordinate')
 
-            for row_id in range(len(axs1)):
-                for col_id in range(len(axs1[row_id])):
-                    # axs1 and axs2 are time series, so only limiting y-axis
-                    axs1[row_id, col_id].set_ylim(0, 1)
+                for row_id in range(len(axs1)):
+                    for col_id in range(len(axs1[row_id])):
+                        # axs1 and axs2 are time series, so only limiting y-axis
+                        axs1[row_id, col_id].set_ylim(0, 1)
 
-                    # axs3 shows trajectories, so limiting both axis
-                    axs2[row_id, col_id].set_xlim(0, 1)
-                    axs2[row_id, col_id].set_ylim(0, 1)
+                for X, y in dataloader:
+                    pred = model.run(X.squeeze().numpy())
+
+                    for count in range(10):
+                        gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0])
+                        pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0])
+
+                        axs1[int(count >= 5)][count % 5].plot(gr[1::2], label=f'Ground truth')
+                        axs1[int(count >= 5)][count % 5].plot(pr[1::2], label='Predicted')
+                        axs1[int(count >= 5)][count % 5].legend()
+
+                    break
+
+                plt.show()
+            
+            elif data_shape == 3:
+                fig1, axs1 = plt.subplots(2, 5, figsize=(20,10))
+                fig2, axs2 = plt.subplots(2, 5, figsize=(20,10))
+
+                fig1.suptitle('Y-coordinate over time')
+                fig2.suptitle('Trajectory')
+
+                plt.setp(axs1[-1, :], xlabel='Frame number')
+                plt.setp(axs1[:, 0], ylabel='Y-coordinate')
+
+                plt.setp(axs2[-1, :], xlabel='X-coordinate')
+                plt.setp(axs2[:, 0], ylabel='Y-coordinate')
+
+                for row_id in range(len(axs1)):
+                    for col_id in range(len(axs1[row_id])):
+                        # axs1 shows time series, so only limiting y-axis
+                        axs1[row_id, col_id].set_ylim(0, 1)
+
+                        # axs2 shows trajectories, so limiting both axis
+                        axs2[row_id, col_id].set_xlim(0, 1)
+                        axs2[row_id, col_id].set_ylim(0, 1)
 
 
-            for X, y in dataloader:
-                pred = model.run(X.squeeze().numpy())
+                for X, y in dataloader:
+                    pred = model.run(X.squeeze().numpy())
 
-                for count in range(10):
-                    gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
-                    pr = np.insert(pred.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
+                    for count in range(10):
+                        gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
+                        pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
 
-                    axs1[int(count >= 5)][count % 5].plot(gr[1::2], label=f'Ground truth')
-                    axs1[int(count >= 5)][count % 5].plot(pr[1::2], label='Predicted')
-                    axs1[int(count >= 5)][count % 5].legend()
+                        axs1[int(count >= 5)][count % 5].plot(gr[1::2], label=f'Ground truth')
+                        axs1[int(count >= 5)][count % 5].plot(pr[1::2], label='Predicted')
+                        axs1[int(count >= 5)][count % 5].legend()
 
-                    axs2[int(count >= 5)][count % 5].plot(gr[0::2], gr[1::2], label=f'Ground truth')
-                    axs2[int(count >= 5)][count % 5].plot(pr[0::2], pr[1::2], label='Predicted')
-                    axs2[int(count >= 5)][count % 5].legend()
+                        axs2[int(count >= 5)][count % 5].plot(gr[0::2], gr[1::2], label=f'Ground truth')
+                        axs2[int(count >= 5)][count % 5].plot(pr[0::2], pr[1::2], label='Predicted')
+                        axs2[int(count >= 5)][count % 5].legend()
 
-                break
+                    break
 
-            plt.show()
+                plt.show()
+
+            elif data_shape == 9:
+                fig1, axs1 = plt.subplots(2, 5, figsize=(20,10))
+                fig2, axs2 = plt.subplots(2, 5, figsize=(20,10))
+                fig3, axs3 = plt.subplots(2, 5, figsize=(20,10))
+
+                fig1.suptitle('Y-coordinate over time')
+                fig2.suptitle('X-coordinate over time')
+                fig3.suptitle('Trajectory')
+
+                plt.setp(axs1[-1, :], xlabel='Frame number')
+                plt.setp(axs1[:, 0], ylabel='Y-coordinate')
+
+                plt.setp(axs2[-1, :], xlabel='Frame number')
+                plt.setp(axs2[:, 0], ylabel='X-coordinate')
+
+                plt.setp(axs3[-1, :], xlabel='X-coordinate')
+                plt.setp(axs3[:, 0], ylabel='Y-coordinate')
+
+                for row_id in range(len(axs1)):
+                    for col_id in range(len(axs1[row_id])):
+                        # axs1 and axs2 are time series, so only limiting y-axis
+                        axs1[row_id, col_id].set_ylim(0, 1)
+                        axs2[row_id, col_id].set_ylim(0, 1)
+
+                        # axs3 shows trajectories, so limiting both axis
+                        axs3[row_id, col_id].set_xlim(0, 1)
+                        axs3[row_id, col_id].set_ylim(0, 1)
+
+
+                for X, y in dataloader:
+                    pred = model.run(X.squeeze().numpy())
+
+                    for count in range(10):
+                        gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][-3:-1])
+                        pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][-3:-1])
+
+                        axs1[int(count >= 5)][count % 5].plot(gr[1::2], label=f'Ground truth')
+                        axs1[int(count >= 5)][count % 5].plot(pr[1::2], label='Predicted')
+                        axs1[int(count >= 5)][count % 5].legend()
+
+                        axs2[int(count >= 5)][count % 5].plot(gr[0::2], label=f'Ground truth')
+                        axs2[int(count >= 5)][count % 5].plot(pr[0::2], label='Predicted')
+                        axs2[int(count >= 5)][count % 5].legend()
+
+                        axs3[int(count >= 5)][count % 5].plot(gr[0::2], gr[1::2], label=f'Ground truth')
+                        axs3[int(count >= 5)][count % 5].plot(pr[0::2], pr[1::2], label='Predicted')
+                        axs3[int(count >= 5)][count % 5].legend()
+
+                    break
+
+                plt.show()
+            
+            else:
+                print('Visual cannot be created as scenario cannot be identified from the data shape')
         return loss
     
     @classmethod

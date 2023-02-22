@@ -93,12 +93,21 @@ class ThreeBallsCollisionDataset(ClassicalMechanicsDataset):
             np.save(file_path, simulation_data)
             total_count += 1
 
-        # Removing the free-fall simulations until the fraction of free-fall scenarios is matched
-        while len(free_fall_paths) / total_count > free_fall_fraction:
-            random_free_fall_file = np.random.choice(free_fall_paths)
-            os.remove(random_free_fall_file)
-            free_fall_paths.remove(random_free_fall_file)
-            total_count -= 1
+        # Getting the number of scenarios that need to be deleted
+        delete_num = int((len(free_fall_paths) - free_fall_fraction*total_count) / (1 + free_fall_fraction))
+
+        # Deleting the number of free-fall scenarios calculated above
+        delete_paths = np.random.choice(free_fall_paths, delete_num)
+        map(os.remove, delete_paths)
+        map(free_fall_paths.remove, delete_paths)
+        total_count -= delete_num
+
+        # # Removing the free-fall simulations until the fraction of free-fall scenarios is matched
+        # while len(free_fall_paths) / total_count > free_fall_fraction:
+        #     random_free_fall_file = np.random.choice(free_fall_paths)
+        #     os.remove(random_free_fall_file)
+        #     free_fall_paths.remove(random_free_fall_file)
+        #     total_count -= 1
 
         print(f'Total scenarios generated: {total_count}')
         print(f'Fraction of the free-fall scenarios: {free_fall_fraction}')
