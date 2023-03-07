@@ -17,9 +17,18 @@ import abc
 import reservoirpy as rpy
 from reservoirpy.nodes import Input, Reservoir, Ridge, ReLU
 
+import pickle
+
+# Helper function to constrain the outputs of the networks between 0 and 1.
 def zero_one_constrain(tensor):
     ceil = torch.minimum(tensor, torch.ones(tensor.size()))
     return F.relu(ceil)
+
+
+#############################################
+# Traditional RNN implementations
+#############################################
+
 
 class RNNBaseClass:
     def run(self, *args, **kwargs):
@@ -201,10 +210,10 @@ class RNNBaseClass:
             # Keeping training log
             print(f'Epoch {epoch} complete. Training loss: {epoch_loss}')
 
-            if len(loss_per_epoch) > 1 and loss_per_epoch[-2] - epoch_loss < epoch_threshold:
-                print(f'Training stopped on epoch {epoch}')
-                break
-            
+            # if len(loss_per_epoch) > 1 and loss_per_epoch[-2] - epoch_loss < epoch_threshold:
+            #     print(f'Training stopped on epoch {epoch}')
+            #     break
+
             epoch_loss = 0
             epoch += 1
 
@@ -301,6 +310,18 @@ class LSTM(nn.Module, RNNBaseClass):
             out = self.relu(out)
 
         return out
+
+
+
+
+
+
+
+
+
+#############################################
+# Echo State Network Implementations
+#############################################
 
 
 # This is the base class for the echo state models. It implements the loss calculation given the reservoir model specifics
