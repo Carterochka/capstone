@@ -17,4 +17,5 @@ from .ThreeBalls2DFreeFallDataset import ThreeBalls2DFreeFallDataset
 from .ThreeBallsCollisionDataset import ThreeBallsCollisionDataset
 
 # Three balls scene development prediction dataset
-from .ThreeBallsCollisionFullSceneDataset import ThreeBallsCollisionsFullSceneDataset
+#from .ThreeBallsCollisionFullSceneDataset import ThreeBallsCollisionFullSceneDataset
+from .ThreeBallsCollisionFullSceneDataset import ThreeBallsCollisionFullSceneDataset
