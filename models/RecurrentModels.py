@@ -516,7 +516,7 @@ class EchoBaseClass(abc.ABC):
                 out_shape = dataset[0][1].shape[1]
 
                 # If the output shape is 2 (X and Y coordinate of single ball), visualize a single ball prediction
-                if out_shape == 2:
+                if out_shape == 48:
                     fig1, axs1 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
                     fig2, axs2 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
                     fig3, axs3 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
@@ -568,23 +568,23 @@ class EchoBaseClass(abc.ABC):
 
                     plt.show()
                 
-                elif out_shape == 6:
-                    fig1, axs1 = plt.subplots(1, 5, figsize=(20,10))
-                    fig2, axs2 = plt.subplots(1, 5, figsize=(20,10))
+                elif out_shape == 144:
+                    fig, axs = plt.subplots(5, 5, figsize=(20, 15))
                     
-                    fig1.suptitle('Trajectories of the balls (predicted)')
-                    fig2.suptitle('Trajectories of the balls (ground truth)')
+                    fig.suptitle('Trajectories of the balls', y=0.95)
                     
-                    plt.setp(axs1[-1, :], xlabel='X-coordinate')
-                    plt.setp(axs2[:, 0], ylabel='Y-coordinate')
+                    plt.setp(axs[-1, :], xlabel='X-coordinate')
+                    plt.setp(axs[:, 0], ylabel='Y-coordinate')
 
-                    for row_id in range(len(axs1)):
-                        for col_id in range(len(axs1[row_id])):
-                            axs1[row_id, col_id].set_xlim(0, 1)
-                            axs1[row_id, col_id].set_ylim(0, 1)
+                    for row_id in range(len(axs)):
+                        for col_id in range(len(axs[row_id])):
+                            axs[row_id, col_id].set_xlim(0, 1)
+                            axs[row_id, col_id].set_ylim(0, 1)
 
-                            axs2[row_id, col_id].set_xlim(0, 1)
-                            axs2[row_id, col_id].set_ylim(0, 1)
+                    col_names = ['Blue ball', 'Green ball', 'Red ball', 'Scene (ground truth)', 'Scene (predicted)']
+
+                    for ax, col in zip(axs[0], col_names):
+                        ax.set_title(col)
 
                     for X, y in dataloader:
                         pred = model.run(X.squeeze().numpy())
@@ -593,13 +593,25 @@ class EchoBaseClass(abc.ABC):
                             gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][[0, 1, 3, 4, 6, 7]])
                             pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][[0, 1, 3, 4, 6, 7]])
 
-                            data_linewidth_plot(gr[0::6], gr[1::6], ax=axs1[count], color='blue', linewidth=X.squeeze().numpy()[count][2], alpha=0.6)
-                            data_linewidth_plot(gr[2::6], gr[3::6], ax=axs1[count], color='green', linewidth=X.squeeze().numpy()[count][5], alpha=0.6)
-                            data_linewidth_plot(gr[4::6], gr[5::6], ax=axs1[count], color='red', linewidth=X.squeeze().numpy()[count][8], alpha=0.6)
+                            axs[count, 0].plot(gr[0::6], gr[1::6], color='blue', label='Ground truth')
+                            axs[count, 0].plot(pr[0::6], pr[1::6], color='orange', label='Predicted')
+                            axs[count, 0].legend()
 
-                            data_linewidth_plot(pr[0::6], pr[1::6], ax=axs2[count], color='blue', linewidth=X.squeeze().numpy()[count][2], alpha=0.6)
-                            data_linewidth_plot(pr[2::6], pr[3::6], ax=axs2[count], color='green', linewidth=X.squeeze().numpy()[count][5], alpha=0.6)
-                            data_linewidth_plot(pr[4::6], pr[5::6], ax=axs2[count], color='red', linewidth=X.squeeze().numpy()[count][8], alpha=0.6)
+                            axs[count, 1].plot(gr[2::6], gr[3::6], color='green', label='Ground truth')
+                            axs[count, 1].plot(pr[2::6], pr[3::6], color='orange', label='Predicted')
+                            axs[count, 1].legend()
+
+                            axs[count, 2].plot(gr[4::6], gr[5::6], color='red', label='Ground truth')
+                            axs[count, 2].plot(pr[4::6], pr[5::6], color='orange', label='Predicted')
+                            axs[count, 2].legend()
+
+                            data_linewidth_plot(gr[0::6], gr[1::6], ax=axs[count, 3], color='blue', linewidth=X.squeeze().numpy()[count][2], alpha=0.6)
+                            data_linewidth_plot(gr[2::6], gr[3::6], ax=axs[count, 3], color='green', linewidth=X.squeeze().numpy()[count][5], alpha=0.6)
+                            data_linewidth_plot(gr[4::6], gr[5::6], ax=axs[count, 3], color='red', linewidth=X.squeeze().numpy()[count][8], alpha=0.6)
+
+                            data_linewidth_plot(pr[0::6], pr[1::6], ax=axs[count, 4], color='blue', linewidth=X.squeeze().numpy()[count][2], alpha=0.6)
+                            data_linewidth_plot(pr[2::6], pr[3::6], ax=axs[count, 4], color='green', linewidth=X.squeeze().numpy()[count][5], alpha=0.6)
+                            data_linewidth_plot(pr[4::6], pr[5::6], ax=axs[count, 4], color='red', linewidth=X.squeeze().numpy()[count][8], alpha=0.6)
 
                         break
 
@@ -656,7 +668,7 @@ class ParallelESN(EchoBaseClass):
         parallels = self.model[0]
 
         for i in range(1, number_of_reservoirs):
-            parallels >> self.model[i]
+            parallels = parallels >> self.model[i]
 
         readout = Ridge(output_dim=output_dim, ridge=ridge_param)# >> ReLU()
         self.model.append(parallels)
