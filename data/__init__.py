@@ -14,7 +14,8 @@ from .OneBall2DFreeFallPredictionFromInitialStateWithDiameterDataset import OneB
 from .ThreeBalls2DFreeFallDataset import ThreeBalls2DFreeFallDataset
 
 # Three balls trajectory prediction dataset
-from .ThreeBallsCollisionDataset import ThreeBallsCollisionsDataset
+from .ThreeBallsCollisionDataset import ThreeBallsCollisionDataset
 
 # Three balls scene development prediction dataset
-from .ThreeBallsCollisionFullSceneDataset import ThreeBallsCollisionsFullSceneDataset
+#from .ThreeBallsCollisionFullSceneDataset import ThreeBallsCollisionFullSceneDataset
+from .ThreeBallsCollisionFullSceneDataset import ThreeBallsCollisionFullSceneDataset
