@@ -1,6 +1,7 @@
 # This file contains all the recurrent models that I am using for training
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 import sys
 
@@ -17,60 +18,249 @@ import abc
 import reservoirpy as rpy
 from reservoirpy.nodes import Input, Reservoir, Ridge, ReLU
 
+import pickle
+
+# Helper function to constrain the outputs of the networks between 0 and 1.
 def zero_one_constrain(tensor):
     ceil = torch.minimum(tensor, torch.ones(tensor.size()))
     return F.relu(ceil)
+
+# Utility class for drawing the line with thickness from data space
+# Source: https://stackoverflow.com/questions/19394505/expand-the-line-with-specified-width-in-data-unit/42972469#42972469
+
+class data_linewidth_plot():
+    def __init__(self, x, y, **kwargs):
+        self.ax = kwargs.pop("ax", plt.gca())
+        self.fig = self.ax.get_figure()
+        self.lw_data = kwargs.pop("linewidth", 1)
+        self.lw = 1
+        self.fig.canvas.draw()
+
+        self.ppd = 72./self.fig.dpi
+        self.trans = self.ax.transData.transform
+        self.linehandle, = self.ax.plot([],[],**kwargs)
+        if "label" in kwargs: kwargs.pop("label")
+        self.line, = self.ax.plot(x, y, **kwargs)
+        self.line.set_color(self.linehandle.get_color())
+        self._resize()
+        self.cid = self.fig.canvas.mpl_connect('draw_event', self._resize)
+
+    def _resize(self, event=None):
+        lw =  ((self.trans((1, self.lw_data))-self.trans((0, 0)))*self.ppd)[1]
+        if lw != self.lw:
+            self.line.set_linewidth(lw)
+            self.lw = lw
+            self._redraw_later()
+
+    def _redraw_later(self):
+        self.timer = self.fig.canvas.new_timer(interval=10)
+        self.timer.single_shot = True
+        self.timer.add_callback(lambda : self.fig.canvas.draw_idle())
+        self.timer.start()
+
+
+#############################################
+# Traditional RNN implementations
+#############################################
+
 
 class RNNBaseClass:
     def run(self, *args, **kwargs):
         return zero_one_constrain(self(*args, **kwargs))
 
     @staticmethod
-    def calculate_loss(model, loss_fn, dataloader, dataset, visualize_first_10_trajectories=True):
+    def calculate_loss(model, loss_fn, dataloader, dataset, visualize_first_10_trajectories=True, viz_shape=(2, 5)):
         loss = (np.sum([loss_fn(model.run(X), y)*len(y) for X, y in dataloader]) / len(dataset)) ** 0.5
         print('Calculated loss: ', loss)
 
         if visualize_first_10_trajectories:
-            fig1, axs1 = plt.subplots(2, 5, figsize=(20,10))
-            fig2, axs2 = plt.subplots(2, 5, figsize=(20,10))
+            data_shape = dataset[0][0].shape[1]
 
-            fig1.suptitle('Y-coordinate over time')
-            fig2.suptitle('Trajectory')
+            # Determining which scenario the data corresponds to from its shape
+            # If the input shape is 2, it's a single ball 1D free-fall prediction
+            if data_shape == 2:
+                fig1, axs1 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
 
-            plt.setp(axs1[-1, :], xlabel='Frame number')
-            plt.setp(axs1[:, 0], ylabel='Y-coordinate')
+                fig1.suptitle('Y-coordinate over time')
 
-            plt.setp(axs2[-1, :], xlabel='X-coordinate')
-            plt.setp(axs2[:, 0], ylabel='Y-coordinate')
+                plt.setp(axs1[-1, :], xlabel='Frame number')
+                plt.setp(axs1[:, 0], ylabel='Y-coordinate')
 
-            for row_id in range(len(axs1)):
-                for col_id in range(len(axs1[row_id])):
-                    # axs1 and axs2 are time series, so only limiting y-axis
-                    axs1[row_id, col_id].set_ylim(0, 1)
+                for row_id in range(len(axs1)):
+                    for col_id in range(len(axs1[row_id])):
+                        # axs1 and axs2 are time series, so only limiting y-axis
+                        axs1[row_id, col_id].set_ylim(0, 1)
 
-                    # axs3 shows trajectories, so limiting both axis
-                    axs2[row_id, col_id].set_xlim(0, 1)
-                    axs2[row_id, col_id].set_ylim(0, 1)
+                for X, y in dataloader:
+                    pred = model.run(X).detach().numpy()
+
+                    for count in range(viz_shape[0]*viz_shape[1]):
+                        gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0])
+                        pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0])
+
+                        axs1[count // viz_shape[1]][count % viz_shape[1]].plot(gr[1::2], label=f'Ground truth')
+                        axs1[count // viz_shape[1]][count % viz_shape[1]].plot(pr[1::2], label='Predicted')
+                        axs1[count // viz_shape[1]][count % viz_shape[1]].legend()
+
+                    break
+
+                plt.show()
+            
+            # If the input shape is 3, it is the 2D single ball free-fall prediction
+            elif data_shape == 3:
+                fig1, axs1 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
+                fig2, axs2 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
+
+                fig1.suptitle('Y-coordinate over time')
+                fig2.suptitle('Trajectory')
+
+                plt.setp(axs1[-1, :], xlabel='Frame number')
+                plt.setp(axs1[:, 0], ylabel='Y-coordinate')
+
+                plt.setp(axs2[-1, :], xlabel='X-coordinate')
+                plt.setp(axs2[:, 0], ylabel='Y-coordinate')
+
+                for row_id in range(len(axs1)):
+                    for col_id in range(len(axs1[row_id])):
+                        # axs1 shows time series, so only limiting y-axis
+                        axs1[row_id, col_id].set_ylim(0, 1)
+
+                        # axs2 shows trajectories, so limiting both axis
+                        axs2[row_id, col_id].set_xlim(0, 1)
+                        axs2[row_id, col_id].set_ylim(0, 1)
 
 
-            for X, y in dataloader:
-                pred = model.run(X).detach().numpy()
+                for X, y in dataloader:
+                    pred = model.run(X).detach().numpy()
 
-                for count in range(10):
-                    gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
-                    pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
+                    for count in range(viz_shape[0]*viz_shape[1]):
+                        gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
+                        pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
 
-                    axs1[int(count >= 5)][count % 5].plot(gr[1::2], label=f'Ground truth')
-                    axs1[int(count >= 5)][count % 5].plot(pr[1::2], label='Predicted')
-                    axs1[int(count >= 5)][count % 5].legend()
+                        axs1[count // viz_shape[1]][count % viz_shape[1]].plot(gr[1::2], label=f'Ground truth')
+                        axs1[count // viz_shape[1]][count % viz_shape[1]].plot(pr[1::2], label='Predicted')
+                        axs1[count // viz_shape[1]][count % viz_shape[1]].legend()
 
-                    axs2[int(count >= 5)][count % 5].plot(gr[0::2], gr[1::2], label=f'Ground truth')
-                    axs2[int(count >= 5)][count % 5].plot(pr[0::2], pr[1::2], label='Predicted')
-                    axs2[int(count >= 5)][count % 5].legend()
+                        axs2[count // viz_shape[1]][count % viz_shape[1]].plot(gr[0::2], gr[1::2], label=f'Ground truth')
+                        axs2[count // viz_shape[1]][count % viz_shape[1]].plot(pr[0::2], pr[1::2], label='Predicted')
+                        axs2[count // viz_shape[1]][count % viz_shape[1]].legend()
 
-                break
+                    break
 
-            plt.show()
+                plt.show()
+
+            # If the shape is 9, it can be either three-ball prediction (free-fall or collisions) or entire scene prediction
+            elif data_shape == 9:
+                out_shape = dataset[0][1].shape[1]
+
+                # If the output shape is 48 (X and Y coordinate of single ball on 24 frames), visualize a single ball prediction
+                if out_shape == 48:
+                    fig1, axs1 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
+                    fig2, axs2 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
+                    fig3, axs3 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
+
+                    fig1.suptitle('Y-coordinate over time')
+                    fig2.suptitle('X-coordinate over time')
+                    fig3.suptitle('Trajectory')
+
+                    plt.setp(axs1[-1, :], xlabel='Frame number')
+                    plt.setp(axs1[:, 0], ylabel='Y-coordinate')
+
+                    plt.setp(axs2[-1, :], xlabel='Frame number')
+                    plt.setp(axs2[:, 0], ylabel='X-coordinate')
+
+                    plt.setp(axs3[-1, :], xlabel='X-coordinate')
+                    plt.setp(axs3[:, 0], ylabel='Y-coordinate')
+
+                    for row_id in range(len(axs1)):
+                        for col_id in range(len(axs1[row_id])):
+                            # axs1 and axs2 are time series, so only limiting y-axis
+                            axs1[row_id, col_id].set_ylim(0, 1)
+                            axs2[row_id, col_id].set_ylim(0, 1)
+
+                            # axs3 shows trajectories, so limiting both axis
+                            axs3[row_id, col_id].set_xlim(0, 1)
+                            axs3[row_id, col_id].set_ylim(0, 1)
+
+
+                    for X, y in dataloader:
+                        pred = model.run(X).detach().numpy()
+
+                        for count in range(viz_shape[0]*viz_shape[1]):
+                            gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][-3:-1])
+                            pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][-3:-1])
+
+                            axs1[count // viz_shape[1]][count % viz_shape[1]].plot(gr[1::2], label=f'Ground truth')
+                            axs1[count // viz_shape[1]][count % viz_shape[1]].plot(pr[1::2], label='Predicted')
+                            axs1[count // viz_shape[1]][count % viz_shape[1]].legend()
+
+                            axs2[count // viz_shape[1]][count % viz_shape[1]].plot(gr[0::2], label=f'Ground truth')
+                            axs2[count // viz_shape[1]][count % viz_shape[1]].plot(pr[0::2], label='Predicted')
+                            axs2[count // viz_shape[1]][count % viz_shape[1]].legend()
+
+                            axs3[count // viz_shape[1]][count % viz_shape[1]].plot(gr[0::2], gr[1::2], label=f'Ground truth')
+                            axs3[count // viz_shape[1]][count % viz_shape[1]].plot(pr[0::2], pr[1::2], label='Predicted')
+                            axs3[count // viz_shape[1]][count % viz_shape[1]].legend()
+
+                        break
+
+                    plt.show()
+            
+                # If the output shape is 144 (X and Y coordinates of 3 balls on 24 frames), visualize the entire scene evolution
+                elif out_shape == 144:
+                    fig, axs = plt.subplots(5, 5, figsize=(20, 15))
+                    
+                    fig.suptitle('Trajectories of the balls', y=0.95)
+                    
+                    plt.setp(axs[-1, :], xlabel='X-coordinate')
+                    plt.setp(axs[:, 0], ylabel='Y-coordinate')
+
+                    for row_id in range(len(axs)):
+                        for col_id in range(len(axs[row_id])):
+                            axs[row_id, col_id].set_xlim(0, 1)
+                            axs[row_id, col_id].set_ylim(0, 1)
+
+                    col_names = ['Blue ball', 'Green ball', 'Red ball', 'Scene (ground truth)', 'Scene (predicted)']
+
+                    for ax, col in zip(axs[0], col_names):
+                        ax.set_title(col)
+
+
+                    for X, y in dataloader:
+                        pred = model.run(X).detach().numpy()
+
+                        for count in tqdm(range(5), desc='Plotting progress'):
+                            gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][[0, 1, 3, 4, 6, 7]])
+                            pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][[0, 1, 3, 4, 6, 7]])
+
+                            axs[count, 0].plot(gr[0::6], gr[1::6], color='blue', label='Ground truth')
+                            axs[count, 0].plot(pr[0::6], pr[1::6], color='orange', label='Predicted')
+                            axs[count, 0].legend()
+
+                            axs[count, 1].plot(gr[2::6], gr[3::6], color='green', label='Ground truth')
+                            axs[count, 1].plot(pr[2::6], pr[3::6], color='orange', label='Predicted')
+                            axs[count, 1].legend()
+
+                            axs[count, 2].plot(gr[4::6], gr[5::6], color='red', label='Ground truth')
+                            axs[count, 2].plot(pr[4::6], pr[5::6], color='orange', label='Predicted')
+                            axs[count, 2].legend()
+
+                            data_linewidth_plot(gr[0::6], gr[1::6], ax=axs[count, 3], color='blue', linewidth=X.squeeze().numpy()[count][2], alpha=0.6)
+                            data_linewidth_plot(gr[2::6], gr[3::6], ax=axs[count, 3], color='green', linewidth=X.squeeze().numpy()[count][5], alpha=0.6)
+                            data_linewidth_plot(gr[4::6], gr[5::6], ax=axs[count, 3], color='red', linewidth=X.squeeze().numpy()[count][8], alpha=0.6)
+
+                            data_linewidth_plot(pr[0::6], pr[1::6], ax=axs[count, 4], color='blue', linewidth=X.squeeze().numpy()[count][2], alpha=0.6)
+                            data_linewidth_plot(pr[2::6], pr[3::6], ax=axs[count, 4], color='green', linewidth=X.squeeze().numpy()[count][5], alpha=0.6)
+                            data_linewidth_plot(pr[4::6], pr[5::6], ax=axs[count, 4], color='red', linewidth=X.squeeze().numpy()[count][8], alpha=0.6)
+
+                        break
+
+                    plt.show()
+
+                else:
+                    print('Visual cannot be created as scenario cannot be identified from the data shape')
+            else:
+                print('Visual cannot be created as scenario cannot be identified from the data shape')
         return loss
     
 
@@ -115,10 +305,10 @@ class RNNBaseClass:
             # Keeping training log
             print(f'Epoch {epoch} complete. Training loss: {epoch_loss}')
 
-            if len(loss_per_epoch) > 1 and loss_per_epoch[-2] - epoch_loss < epoch_threshold:
-                print(f'Training stopped on epoch {epoch}')
-                break
-            
+            # if len(loss_per_epoch) > 1 and loss_per_epoch[-2] - epoch_loss < epoch_threshold:
+            #     print(f'Training stopped on epoch {epoch}')
+            #     break
+
             epoch_loss = 0
             epoch += 1
 
@@ -217,6 +407,18 @@ class LSTM(nn.Module, RNNBaseClass):
         return out
 
 
+
+
+
+
+
+
+
+#############################################
+# Echo State Network Implementations
+#############################################
+
+
 # This is the base class for the echo state models. It implements the loss calculation given the reservoir model specifics
 class EchoBaseClass(abc.ABC):
     @abc.abstractmethod
@@ -233,51 +435,192 @@ class EchoBaseClass(abc.ABC):
 
 
     @staticmethod
-    def calculate_loss(model, loss_fn, dataloader, dataset, visualize_first_10_trajectories=True):
+    def calculate_loss(model, loss_fn, dataloader, dataset, visualize_first_10_trajectories=True, viz_shape=(2, 5)):
         loss = (np.sum([loss_fn(model.run(X.squeeze().numpy()), y.squeeze())*len(y) for X, y in dataloader]) / len(dataset)) ** 0.5
         print('Test loss: ', loss)
 
         if visualize_first_10_trajectories:
-            fig1, axs1 = plt.subplots(2, 5, figsize=(20,10))
-            fig2, axs2 = plt.subplots(2, 5, figsize=(20,10))
+            data_shape = dataset[0][0].shape[1]
 
-            fig1.suptitle('Y-coordinate over time')
-            fig2.suptitle('Trajectory')
+            if data_shape == 2:
+                fig1, axs1 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
 
-            plt.setp(axs1[-1, :], xlabel='Frame number')
-            plt.setp(axs1[:, 0], ylabel='Y-coordinate')
+                fig1.suptitle('Y-coordinate over time')
 
-            plt.setp(axs2[-1, :], xlabel='X-coordinate')
-            plt.setp(axs2[:, 0], ylabel='Y-coordinate')
+                plt.setp(axs1[-1, :], xlabel='Frame number')
+                plt.setp(axs1[:, 0], ylabel='Y-coordinate')
 
-            for row_id in range(len(axs1)):
-                for col_id in range(len(axs1[row_id])):
-                    # axs1 and axs2 are time series, so only limiting y-axis
-                    axs1[row_id, col_id].set_ylim(0, 1)
+                for row_id in range(len(axs1)):
+                    for col_id in range(len(axs1[row_id])):
+                        # axs1 and axs2 are time series, so only limiting y-axis
+                        axs1[row_id, col_id].set_ylim(0, 1)
 
-                    # axs3 shows trajectories, so limiting both axis
-                    axs2[row_id, col_id].set_xlim(0, 1)
-                    axs2[row_id, col_id].set_ylim(0, 1)
+                for X, y in dataloader:
+                    pred = model.run(X.squeeze().numpy())
+
+                    for count in range(viz_shape[0]*viz_shape[1]):
+                        gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0])
+                        pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0])
+
+                        axs1[count // viz_shape[1]][count % viz_shape[1]].plot(gr[1::2], label=f'Ground truth')
+                        axs1[count // viz_shape[1]][count % viz_shape[1]].plot(pr[1::2], label='Predicted')
+                        axs1[count // viz_shape[1]][count % viz_shape[1]].legend()
+
+                    break
+
+                plt.show()
+            
+            elif data_shape == 3:
+                fig1, axs1 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
+                fig2, axs2 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
+
+                fig1.suptitle('Y-coordinate over time')
+                fig2.suptitle('Trajectory')
+
+                plt.setp(axs1[-1, :], xlabel='Frame number')
+                plt.setp(axs1[:, 0], ylabel='Y-coordinate')
+
+                plt.setp(axs2[-1, :], xlabel='X-coordinate')
+                plt.setp(axs2[:, 0], ylabel='Y-coordinate')
+
+                for row_id in range(len(axs1)):
+                    for col_id in range(len(axs1[row_id])):
+                        # axs1 shows time series, so only limiting y-axis
+                        axs1[row_id, col_id].set_ylim(0, 1)
+
+                        # axs2 shows trajectories, so limiting both axis
+                        axs2[row_id, col_id].set_xlim(0, 1)
+                        axs2[row_id, col_id].set_ylim(0, 1)
 
 
-            for X, y in dataloader:
-                pred = model.run(X.squeeze().numpy())
+                for X, y in dataloader:
+                    pred = model.run(X.squeeze().numpy())
 
-                for count in range(10):
-                    gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
-                    pr = np.insert(pred.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
+                    for count in range(viz_shape[0]*viz_shape[1]):
+                        gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
+                        pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][0:2])
 
-                    axs1[int(count >= 5)][count % 5].plot(gr[1::2], label=f'Ground truth')
-                    axs1[int(count >= 5)][count % 5].plot(pr[1::2], label='Predicted')
-                    axs1[int(count >= 5)][count % 5].legend()
+                        axs1[count // viz_shape[1]][count % viz_shape[1]].plot(gr[1::2], label=f'Ground truth')
+                        axs1[count // viz_shape[1]][count % viz_shape[1]].plot(pr[1::2], label='Predicted')
+                        axs1[count // viz_shape[1]][count % viz_shape[1]].legend()
 
-                    axs2[int(count >= 5)][count % 5].plot(gr[0::2], gr[1::2], label=f'Ground truth')
-                    axs2[int(count >= 5)][count % 5].plot(pr[0::2], pr[1::2], label='Predicted')
-                    axs2[int(count >= 5)][count % 5].legend()
+                        axs2[count // viz_shape[1]][count % viz_shape[1]].plot(gr[0::2], gr[1::2], label=f'Ground truth')
+                        axs2[count // viz_shape[1]][count % viz_shape[1]].plot(pr[0::2], pr[1::2], label='Predicted')
+                        axs2[count // viz_shape[1]][count % viz_shape[1]].legend()
 
-                break
+                    break
 
-            plt.show()
+                plt.show()
+
+            elif data_shape == 9:
+                out_shape = dataset[0][1].shape[1]
+
+                # If the output shape is 2 (X and Y coordinate of single ball), visualize a single ball prediction
+                if out_shape == 48:
+                    fig1, axs1 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
+                    fig2, axs2 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
+                    fig3, axs3 = plt.subplots(viz_shape[0], viz_shape[1], figsize=(20,10))
+
+                    fig1.suptitle('Y-coordinate over time')
+                    fig2.suptitle('X-coordinate over time')
+                    fig3.suptitle('Trajectory')
+
+                    plt.setp(axs1[-1, :], xlabel='Frame number')
+                    plt.setp(axs1[:, 0], ylabel='Y-coordinate')
+
+                    plt.setp(axs2[-1, :], xlabel='Frame number')
+                    plt.setp(axs2[:, 0], ylabel='X-coordinate')
+
+                    plt.setp(axs3[-1, :], xlabel='X-coordinate')
+                    plt.setp(axs3[:, 0], ylabel='Y-coordinate')
+
+                    for row_id in range(len(axs1)):
+                        for col_id in range(len(axs1[row_id])):
+                            # axs1 and axs2 are time series, so only limiting y-axis
+                            axs1[row_id, col_id].set_ylim(0, 1)
+                            axs2[row_id, col_id].set_ylim(0, 1)
+
+                            # axs3 shows trajectories, so limiting both axis
+                            axs3[row_id, col_id].set_xlim(0, 1)
+                            axs3[row_id, col_id].set_ylim(0, 1)
+
+
+                    for X, y in dataloader:
+                        pred = model.run(X.squeeze().numpy())
+
+                        for count in range(viz_shape[0]*viz_shape[1]):
+                            gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][-3:-1])
+                            pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][-3:-1])
+
+                            axs1[count // viz_shape[1]][count % viz_shape[1]].plot(gr[1::2], label=f'Ground truth')
+                            axs1[count // viz_shape[1]][count % viz_shape[1]].plot(pr[1::2], label='Predicted')
+                            axs1[count // viz_shape[1]][count % viz_shape[1]].legend()
+
+                            axs2[count // viz_shape[1]][count % viz_shape[1]].plot(gr[0::2], label=f'Ground truth')
+                            axs2[count // viz_shape[1]][count % viz_shape[1]].plot(pr[0::2], label='Predicted')
+                            axs2[count // viz_shape[1]][count % viz_shape[1]].legend()
+
+                            axs3[count // viz_shape[1]][count % viz_shape[1]].plot(gr[0::2], gr[1::2], label=f'Ground truth')
+                            axs3[count // viz_shape[1]][count % viz_shape[1]].plot(pr[0::2], pr[1::2], label='Predicted')
+                            axs3[count // viz_shape[1]][count % viz_shape[1]].legend()
+
+                        break
+
+                    plt.show()
+                
+                elif out_shape == 144:
+                    fig, axs = plt.subplots(5, 5, figsize=(20, 15))
+                    
+                    fig.suptitle('Trajectories of the balls', y=0.95)
+                    
+                    plt.setp(axs[-1, :], xlabel='X-coordinate')
+                    plt.setp(axs[:, 0], ylabel='Y-coordinate')
+
+                    for row_id in range(len(axs)):
+                        for col_id in range(len(axs[row_id])):
+                            axs[row_id, col_id].set_xlim(0, 1)
+                            axs[row_id, col_id].set_ylim(0, 1)
+
+                    col_names = ['Blue ball', 'Green ball', 'Red ball', 'Scene (ground truth)', 'Scene (predicted)']
+
+                    for ax, col in zip(axs[0], col_names):
+                        ax.set_title(col)
+
+                    for X, y in dataloader:
+                        pred = model.run(X.squeeze().numpy())
+
+                        for count in tqdm(range(5), desc='Plotting progress'):
+                            gr = np.insert(y.squeeze().numpy()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][[0, 1, 3, 4, 6, 7]])
+                            pr = np.insert(pred.squeeze()[count].reshape(1,-1)[0], 0, X.squeeze().numpy()[count][[0, 1, 3, 4, 6, 7]])
+
+                            axs[count, 0].plot(gr[0::6], gr[1::6], color='blue', label='Ground truth')
+                            axs[count, 0].plot(pr[0::6], pr[1::6], color='orange', label='Predicted')
+                            axs[count, 0].legend()
+
+                            axs[count, 1].plot(gr[2::6], gr[3::6], color='green', label='Ground truth')
+                            axs[count, 1].plot(pr[2::6], pr[3::6], color='orange', label='Predicted')
+                            axs[count, 1].legend()
+
+                            axs[count, 2].plot(gr[4::6], gr[5::6], color='red', label='Ground truth')
+                            axs[count, 2].plot(pr[4::6], pr[5::6], color='orange', label='Predicted')
+                            axs[count, 2].legend()
+
+                            data_linewidth_plot(gr[0::6], gr[1::6], ax=axs[count, 3], color='blue', linewidth=X.squeeze().numpy()[count][2], alpha=0.6)
+                            data_linewidth_plot(gr[2::6], gr[3::6], ax=axs[count, 3], color='green', linewidth=X.squeeze().numpy()[count][5], alpha=0.6)
+                            data_linewidth_plot(gr[4::6], gr[5::6], ax=axs[count, 3], color='red', linewidth=X.squeeze().numpy()[count][8], alpha=0.6)
+
+                            data_linewidth_plot(pr[0::6], pr[1::6], ax=axs[count, 4], color='blue', linewidth=X.squeeze().numpy()[count][2], alpha=0.6)
+                            data_linewidth_plot(pr[2::6], pr[3::6], ax=axs[count, 4], color='green', linewidth=X.squeeze().numpy()[count][5], alpha=0.6)
+                            data_linewidth_plot(pr[4::6], pr[5::6], ax=axs[count, 4], color='red', linewidth=X.squeeze().numpy()[count][8], alpha=0.6)
+
+                        break
+
+                    plt.show()
+
+                else:
+                    print('Visual cannot be created as scenario cannot be identified from the data shape')
+            else:
+                print('Visual cannot be created as scenario cannot be identified from the data shape')
         return loss
     
     @classmethod
@@ -325,7 +668,7 @@ class ParallelESN(EchoBaseClass):
         parallels = self.model[0]
 
         for i in range(1, number_of_reservoirs):
-            parallels >> self.model[i]
+            parallels = parallels >> self.model[i]
 
         readout = Ridge(output_dim=output_dim, ridge=ridge_param)# >> ReLU()
         self.model.append(parallels)

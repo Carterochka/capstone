@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 import phyre
 
-class ThreeBallsCollisionsFullSceneDataset(ClassicalMechanicsDataset):
+class ThreeBallsCollisionFullSceneDataset(ClassicalMechanicsDataset):
     def __getitem__(self, idx):
         data = np.load(self.data_files[idx])
         return torch.FloatTensor(data[0]).unsqueeze(dim=0), torch.FloatTensor(data[1:, [0, 1, 3, 4, 6, 7]]).reshape(1,-1)
@@ -39,6 +39,11 @@ class ThreeBallsCollisionsFullSceneDataset(ClassicalMechanicsDataset):
         # Action dimensions: 3 (x, y, radius) - represent coordinates and size of the red ball
         actions = simulator.build_discrete_action_space(max_actions=max_actions)
 
+        # Defining a function to check if the red ball is in the free fall throughout the simulation
+        def is_red_ball_in_free_fall(simulation):
+            features = simulation.featurized_objects.features
+            return False not in [features[0][-1][0] == features[frame_id][-1][0] for frame_id in range(len(features))]
+
         # Getting only the coordinates of the red ball
         def get_simulation_data(simulation):
             features = simulation.featurized_objects.features
@@ -54,6 +59,13 @@ class ThreeBallsCollisionsFullSceneDataset(ClassicalMechanicsDataset):
                 data.append(instance)
             return data
         
+        # getting the free-fall fraction from the function call arguments
+        free_fall_fraction = kwargs['free_fall_fraction']
+
+        # setting up helper variables to manage the fraction of free-fall scenarios
+        free_fall_paths = []
+        total_count = 0
+
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
         else:
@@ -67,4 +79,24 @@ class ThreeBallsCollisionsFullSceneDataset(ClassicalMechanicsDataset):
             if simulation.status.is_invalid(): continue
             simulation_data = get_simulation_data(simulation)
             if not simulation_data: continue
-            np.save(self.data_path + f'/task-{task_index}-action-{action_index}', simulation_data)
+            file_path = self.data_path + f'/task-{task_index}-action-{action_index}'
+
+            # If the simulated scenario is the free-fall, then save its path
+            if is_red_ball_in_free_fall(simulation):
+                free_fall_paths.append(file_path)
+            
+            # Save the simulation and count it toward the total
+            np.save(file_path, simulation_data)
+            total_count += 1
+
+        # Getting the number of scenarios that need to be deleted
+        delete_num = int((len(free_fall_paths) - free_fall_fraction*total_count) / (1 + free_fall_fraction))
+
+        # Deleting the number of free-fall scenarios calculated above
+        delete_paths = np.random.choice(free_fall_paths, delete_num)
+        map(os.remove, delete_paths)
+        map(free_fall_paths.remove, delete_paths)
+        total_count -= delete_num
+
+        print(f'Total scenarios generated: {total_count}')
+        print(f'Fraction of the free-fall scenarios: {free_fall_fraction}')
